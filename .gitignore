@@ -32,13 +32,24 @@ ENV/
 *.swo
 
 # Project specific
-data/raw/
-data/processed/
+test_highpolygon_fbx/
+test_highpolygon_obj/
+ModelNet40/
+output/
 checkpoints/
 *.log
 *.pt
 *.pth
 *.ckpt
+*.obj
+*.fbx
+*.ply
+*.stl
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
 
 # OS specific
 .DS_Store

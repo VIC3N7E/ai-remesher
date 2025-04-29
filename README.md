@@ -1,71 +1,94 @@
 # AI Remesher
 
-A deep learning-based approach for automatic mesh retopology, focusing on producing high-quality, production-ready mesh topology.
+A mesh processing pipeline for feature extraction, visualization, and retopology.
 
 ## Features
 
-- Automatic mesh retopology with feature preservation
-- Quad-dominant mesh generation
-- UV seam and normal preservation
-- Feature line detection and preservation
-- Topology-aware simplification
-- Progressive training strategy
-
-## Project Structure
-
-```
-ai-remesher/
-├── src/
-│   ├── models/         # Neural network architectures
-│   ├── data/           # Data processing and loading
-│   ├── utils/          # Utility functions
-│   └── configs/        # Configuration files
-├── tests/              # Unit tests
-├── examples/           # Example usage and demos
-├── data/
-│   ├── raw/           # Raw input meshes
-│   └── processed/     # Processed training data
-└── checkpoints/       # Model checkpoints
-```
+- Mesh feature extraction (curvature, edges, corners, creases)
+- Interactive 3D visualization using PyVista
+- Mesh export in various formats (OBJ, PLY, STL)
+- Configurable processing pipeline
 
 ## Installation
 
-1. Create a new conda environment:
+1. Clone the repository:
 ```bash
-conda create -n ai-remesher python=3.10
-conda activate ai-remesher
+git clone https://github.com/yourusername/ai-remesher.git
+cd ai-remesher
 ```
 
-2. Install dependencies:
+2. Create a virtual environment (optional but recommended):
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
-
-1. Place your input meshes in `data/raw/`
-2. Run preprocessing:
+4. Install the package in development mode:
 ```bash
-python src/data/preprocess.py
+pip install -e .
 ```
 
-3. Train the model:
+## Testing
+
+To test the mesh processing pipeline:
+
+1. Create sample meshes for testing (optional):
 ```bash
-python src/train.py
+python create_sample_mesh.py
+```
+This will create sample meshes in the `sample_meshes` directory.
+
+2. Run the test script:
+```bash
+python run_test.py --mesh path/to/your/mesh.obj
 ```
 
-4. Run inference:
+Or if you created sample meshes:
 ```bash
-python src/inference.py --input path/to/mesh.obj --output path/to/output.obj
+python run_test.py --mesh sample_meshes/sphere.obj
 ```
 
-## Development
+Optional arguments:
+- `--config`: Path to configuration file (default: configs/default.yaml)
+- `--output`: Output directory for results (default: output/test)
 
-- Code style: Black + isort
-- Type checking: mypy
-- Linting: pylint
-- Testing: pytest
+The test will:
+- Load and process the mesh
+- Extract features (curvature, edges, corners, creases)
+- Generate visualizations
+- Export the processed mesh with features
+
+Results will be saved in the output directory:
+- `mesh.png`: Original mesh visualization
+- `features.png`: Feature visualization
+- `curvature.png`: Curvature visualization
+- `feature_edges.png`: Feature edges visualization
+- `feature_corners.png`: Feature corners visualization
+- `feature_creases.png`: Feature creases visualization
+- `mesh_with_features.obj`: Exported mesh with features
+
+## Configuration
+
+The pipeline can be configured through the YAML configuration file. See `configs/default.yaml` for available options.
 
 ## License
 
-ISEP License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Citation
+
+If you use this code in your research, please cite:
+
+```bibtex
+@software{ai_remesher,
+  title = {AI Remesher},
+  author = {Your Name},
+  year = {2024},
+  url = {https://github.com/yourusername/ai-remesher}
+}
+```

@@ -39,7 +39,7 @@ setuptools==72.1.0
 six==1.16.0
 sympy==1.13.1
 threadpoolctl==3.5.0
-tqdm>=4.65.0
+tqdm>=4.62.0
 trimesh>=3.9.0
 typing_extensions==4.12.2
 tzdata==2024.1
@@ -47,11 +47,12 @@ urllib3==2.2.2
 wheel==0.43.0
 xxhash==3.4.1
 yarl==1.9.4
-torch>=2.0.0
+torch>=1.9.0
 torch-geometric>=2.3.0
-matplotlib>=3.5.0
+matplotlib>=3.4.0
 open3d>=0.17.0
 black>=22.0.0
 isort>=5.10.0
 mypy>=0.910
 pylint>=2.12.0
+pyvista>=0.34.0
