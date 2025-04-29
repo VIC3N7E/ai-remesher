@@ -181,19 +181,25 @@ def faces_to_edges(faces: torch.Tensor) -> torch.Tensor:
     """Convert face indices to edge indices.
     
     Args:
-        faces: Tensor of face indices with shape (num_faces, 3)
+        faces: Tensor of face indices with shape (batch_size, num_faces, 3) or (num_faces, 3)
         
     Returns:
-        edge_index: Tensor of edge indices with shape (2, num_edges)
+        Tensor of edge indices with shape (2, num_edges)
     """
+    # Handle batched faces
+    if faces.dim() == 3:
+        # For now, we'll just use the first mesh in the batch
+        faces = faces[0]
+    
     # Create edges from faces
     edges = torch.cat([
-        torch.stack([faces[:, i], faces[:, (i + 1) % 3]], dim=1)
-        for i in range(3)
+        faces[:, [0, 1]],
+        faces[:, [1, 2]],
+        faces[:, [2, 0]]
     ], dim=0)
     
     # Remove duplicate edges
-    edges = torch.unique(torch.sort(edges, dim=1)[0], dim=0)
+    edges = torch.unique(edges, dim=0)
     
     # Convert to edge index format (2, num_edges)
     edge_index = edges.t().contiguous()

@@ -1,11 +1,11 @@
 model:
-  in_channels: 3
-  hidden_channels: 128
-  num_transformer_layers: 4
-  num_heads: 8
+  in_channels: 6  # 3 for positions + 3 for normals
+  hidden_channels: 32  # Simple architecture with smaller hidden size
+  num_transformer_layers: 1  # Further reduced from 2
+  num_heads: 4  # Kept the same
 
 training:
-  batch_size: 32
+  batch_size: 4  # Further reduced batch size
   num_epochs: 100
   learning_rate: 1.0e-4
   weight_decay: 1.0e-5

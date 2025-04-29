@@ -50,7 +50,7 @@ checkpoints/
 *.jpeg
 *.pdf
 *.svg
-
+*.off
 # OS specific
 .DS_Store
 Thumbs.db 

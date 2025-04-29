@@ -1,84 +1,32 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, global_mean_pool
-from typing import Tuple, Optional, Dict, List
+from torch_geometric.nn import GCNConv
+from typing import Dict, Optional
 
-class FeatureExtractor(nn.Module):
-    def __init__(self, in_channels: int, hidden_channels: int):
+class SimpleRetopologyModel(nn.Module):
+    def __init__(
+        self,
+        in_channels: int = 6,
+        hidden_channels: int = 32
+    ):
         super().__init__()
+        
+        # Feature extraction with GCN layers
         self.conv1 = GCNConv(in_channels, hidden_channels)
         self.conv2 = GCNConv(hidden_channels, hidden_channels)
-        self.conv3 = GCNConv(hidden_channels, hidden_channels)
         
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        x = F.relu(self.conv1(x, edge_index))
-        x = F.relu(self.conv2(x, edge_index))
-        x = self.conv3(x, edge_index)
-        return x
-
-class TransformerBlock(nn.Module):
-    def __init__(self, hidden_channels: int, num_heads: int = 8):
-        super().__init__()
-        self.attention = nn.MultiheadAttention(hidden_channels, num_heads)
-        self.norm1 = nn.LayerNorm(hidden_channels)
-        self.norm2 = nn.LayerNorm(hidden_channels)
-        self.ffn = nn.Sequential(
-            nn.Linear(hidden_channels, hidden_channels * 4),
-            nn.ReLU(),
-            nn.Linear(hidden_channels * 4, hidden_channels)
-        )
-        
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Self-attention
-        attn_out, _ = self.attention(x, x, x)
-        x = self.norm1(x + attn_out)
-        
-        # Feed-forward
-        ffn_out = self.ffn(x)
-        x = self.norm2(x + ffn_out)
-        return x
-
-class TopologyPredictor(nn.Module):
-    def __init__(self, hidden_channels: int):
-        super().__init__()
-        self.predictor = nn.Sequential(
-            nn.Linear(hidden_channels, hidden_channels),
-            nn.ReLU(),
+        # Prediction heads
+        self.topology_head = nn.Sequential(
             nn.Linear(hidden_channels, hidden_channels // 2),
             nn.ReLU(),
             nn.Linear(hidden_channels // 2, 1)
         )
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.predictor(x)
-
-class RetopologyModel(nn.Module):
-    def __init__(
-        self,
-        in_channels: int = 3,
-        hidden_channels: int = 128,
-        num_transformer_layers: int = 4
-    ):
-        super().__init__()
-        
-        # Feature extraction
-        self.feature_extractor = FeatureExtractor(in_channels, hidden_channels)
-        
-        # Transformer layers for global context
-        self.transformer_layers = nn.ModuleList([
-            TransformerBlock(hidden_channels)
-            for _ in range(num_transformer_layers)
-        ])
-        
-        # Topology prediction
-        self.topology_predictor = TopologyPredictor(hidden_channels)
-        
-        # UV and normal preservation
-        self.attribute_predictor = nn.Sequential(
-            nn.Linear(hidden_channels, hidden_channels),
+        self.attribute_head = nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels // 2),
             nn.ReLU(),
-            nn.Linear(hidden_channels, 6)  # 3 for normals, 3 for UV coordinates
+            nn.Linear(hidden_channels // 2, 6)  # 3 for normals, 3 for UV coordinates
         )
         
     def forward(
@@ -87,19 +35,15 @@ class RetopologyModel(nn.Module):
         edge_index: torch.Tensor,
         batch: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
-        # Extract local features
-        local_features = self.feature_extractor(x, edge_index)
-        
-        # Apply transformer layers for global context
-        global_features = local_features
-        for transformer in self.transformer_layers:
-            global_features = transformer(global_features)
+        # Extract features
+        x = F.relu(self.conv1(x, edge_index))
+        features = self.conv2(x, edge_index)
         
         # Predict topology
-        topology_logits = self.topology_predictor(global_features)
+        topology_logits = self.topology_head(features)
         
-        # Predict attributes (normals and UVs)
-        attributes = self.attribute_predictor(global_features)
+        # Predict attributes
+        attributes = self.attribute_head(features)
         normals = attributes[:, :3]
         uvs = attributes[:, 3:]
         
@@ -107,7 +51,7 @@ class RetopologyModel(nn.Module):
             'topology_logits': topology_logits,
             'normals': normals,
             'uvs': uvs,
-            'features': global_features
+            'features': features
         }
     
     def compute_loss(
