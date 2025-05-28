@@ -51,6 +51,7 @@ checkpoints/
 *.pdf
 *.svg
 *.off
+*.mtl
 # OS specific
 .DS_Store
 Thumbs.db 
