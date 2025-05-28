@@ -253,8 +253,9 @@ def main():
     parser.add_argument('--models-per-epoch', type=int, help='Number of models to use per epoch (default: use all available models)')
     args = parser.parse_args()
     
-    # Create checkpoint directory if it doesn't exist
+    # Create checkpoint and logs directories if they don't exist
     os.makedirs(args.checkpoint_dir, exist_ok=True)
+    os.makedirs('logs', exist_ok=True)
     
     # Set up logging
     logging.basicConfig(
