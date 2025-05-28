@@ -246,100 +246,90 @@ def main():
     parser.add_argument('--batch-size', type=int, default=1, help='Batch size for training')  # Reduced to 1
     parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--checkpoint-interval', type=int, default=10, help='Save checkpoint every N batches')
+    parser.add_argument('--checkpoint-dir', type=str, default='checkpoints', help='Directory to save checkpoints')
     parser.add_argument('--num-workers', type=int, default=1, help='Number of workers for data loading')  # Reduced to 1
     parser.add_argument('--hidden-channels', type=int, default=128, help='Number of hidden channels in the model')
     parser.add_argument('--num-layers', type=int, default=3, help='Number of layers in encoder and decoder')
     parser.add_argument('--models-per-epoch', type=int, help='Number of models to use per epoch (default: use all available models)')
     args = parser.parse_args()
     
-    # Create checkpoints directory
-    os.makedirs('checkpoints', exist_ok=True)
+    # Create checkpoint directory if it doesn't exist
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
     
     # Set up logging
-    log_dir = setup_logging(args.data_dir)
-    
-    # Initialize model with configurable architecture
-    model = RetopologyModel(
-        in_channels=3,
-        hidden_channels=args.hidden_channels,
-        num_layers=args.num_layers
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join('logs', 'training.log')),
+            logging.StreamHandler()
+        ]
     )
     
-    # Move model to GPU if available
+    # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = model.to(device)
+    logging.info(f"Using device: {device}")
     
-    # Initialize trainer
+    # Create model
+    model = RetopologyModel(
+        hidden_channels=args.hidden_channels,
+        num_layers=args.num_layers
+    ).to(device)
+    
+    # Create trainer
     trainer = RetopologyTrainer(model, learning_rate=args.learning_rate)
     
-    # Create dataset and dataloader with smaller batch size
-    dataset = MeshDataset(args.data_dir, models_per_epoch=args.models_per_epoch, num_workers=args.num_workers)
+    # Create dataset
+    dataset = MeshDataset(args.data_dir, models_per_epoch=args.models_per_epoch)
+    
+    # Create data loader
     dataloader = DataLoader(
         dataset,
-        batch_size=1,  # Force batch size to 1
+        batch_size=args.batch_size,
         shuffle=True,
-        num_workers=0,  # Disable multiprocessing
-        collate_fn=custom_collate,
-        pin_memory=True if torch.cuda.is_available() else False
+        num_workers=args.num_workers
     )
     
     # Training loop
     for epoch in range(args.num_epochs):
-        epoch_losses = []
-        progress_bar = tqdm(dataloader, desc=f'Epoch {epoch+1}/{args.num_epochs}')
+        logging.info(f"Starting epoch {epoch + 1}/{args.num_epochs}")
         
-        for batch_idx, (input_meshes, target_meshes) in enumerate(progress_bar):
+        for batch_idx, (input_mesh, target_mesh) in enumerate(dataloader):
             try:
+                # Move to device
+                input_mesh = input_mesh.to(device)
+                target_mesh = target_mesh.to(device)
+                
                 # Training step
-                chamfer_loss, normal_loss = trainer.train_step(input_meshes, target_meshes)
-                total_loss = chamfer_loss + 0.01 * normal_loss
-                epoch_losses.append(total_loss)
+                chamfer_loss, normal_loss = trainer.train_step(input_mesh, target_mesh)
                 
-                # Update progress bar
-                progress_bar.set_postfix({
-                    'chamfer_loss': f'{chamfer_loss:.4f}',
-                    'normal_loss': f'{normal_loss:.4f}',
-                    'total_loss': f'{total_loss:.4f}'
-                })
+                # Log progress
+                if (batch_idx + 1) % 10 == 0:
+                    logging.info(f"Epoch {epoch + 1}, Batch {batch_idx + 1}: "
+                               f"Chamfer Loss = {chamfer_loss:.6f}, "
+                               f"Normal Loss = {normal_loss:.6f}")
                 
-                # Save checkpoint every N batches
+                # Save checkpoint
                 if (batch_idx + 1) % args.checkpoint_interval == 0:
-                    checkpoint_path = f'checkpoints/checkpoint_epoch_{epoch+1}_batch_{batch_idx+1}.pt'
+                    checkpoint_path = os.path.join(
+                        args.checkpoint_dir,
+                        f'checkpoint_epoch_{epoch + 1}_batch_{batch_idx + 1}.pt'
+                    )
                     torch.save({
                         'epoch': epoch + 1,
                         'batch': batch_idx + 1,
                         'model_state_dict': model.state_dict(),
                         'optimizer_state_dict': trainer.optimizer.state_dict(),
                         'chamfer_loss': chamfer_loss,
-                        'normal_loss': normal_loss,
-                        'total_loss': total_loss
+                        'normal_loss': normal_loss
                     }, checkpoint_path)
-                    logging.info(f'Saved checkpoint to {checkpoint_path}')
-                    
-                # Clear memory after each batch
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    logging.info(f"Saved checkpoint to {checkpoint_path}")
                 
-            except RuntimeError as e:
-                if "out of memory" in str(e):
-                    logging.error(f"GPU OOM in batch {batch_idx}. Skipping batch.")
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    continue
-                else:
-                    raise e
+            except Exception as e:
+                logging.error(f"Error in batch {batch_idx + 1}: {str(e)}")
+                continue
         
-        # Save epoch checkpoint
-        epoch_checkpoint_path = f'checkpoints/checkpoint_epoch_{epoch+1}.pt'
-        torch.save({
-            'epoch': epoch + 1,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': trainer.optimizer.state_dict(),
-            'chamfer_loss': np.mean(epoch_losses)
-        }, epoch_checkpoint_path)
-        logging.info(f'Saved epoch checkpoint to {epoch_checkpoint_path}')
-        
-        # Clear memory after each epoch
-        torch.cuda.empty_cache() if torch.cuda.is_available() else None
+        logging.info(f"Completed epoch {epoch + 1}")
 
 if __name__ == '__main__':
     main() 
