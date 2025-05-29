@@ -301,7 +301,8 @@ def main():
         dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        collate_fn=custom_collate
     )
     
     # Training loop
