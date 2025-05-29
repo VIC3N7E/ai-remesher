@@ -163,56 +163,45 @@ def process_mesh_pair(args: Tuple[Path, Path]) -> Dict:
         }
 
 class MeshDataset(Dataset):
-    def __init__(self, data_dir, models_per_epoch=None, num_workers=1):  # Reduced to single worker
+    def __init__(self, data_dir, models_per_epoch=None, num_workers=1, is_train=True):  # Reduced to single worker
         self.data_dir = Path(data_dir)
         self.models_per_epoch = models_per_epoch
         
         # Find all mesh pairs
         self.mesh_pairs = []
-        modified_dir = self.data_dir / 'modified'
-        original_dir = self.data_dir / 'original'
+        if is_train:
+            modified_dir = self.data_dir / 'modified' / 'train' 
+            original_dir = self.data_dir / 'original' / 'train'
+        else:
+            modified_dir = self.data_dir / 'modified' / 'validation'
+            original_dir = self.data_dir / 'original' / 'validation'
         
         logging.info(f"Searching for mesh pairs in:")
         logging.info(f"Modified directory: {modified_dir}")
         logging.info(f"Original directory: {original_dir}")
         
-        # Look in train and validation directories
-        for split in ['train', 'validation']:
-            modified_split_dir = modified_dir / split
-            original_split_dir = original_dir / split
+        modified_files = list(modified_dir.glob('*_modified.obj'))
+        logging.info(f"Found {len(modified_files)} modified mesh files")
+        
+        for mesh_file in modified_files:
+            # Get the base name (e.g., 'bed_0384' from 'bed_0384_modified.obj')
+            base_name = mesh_file.stem.replace('_modified', '')
+            original_file = original_dir / f"{base_name}_original.obj"
             
-            if not modified_split_dir.exists():
-                logging.warning(f"Modified {split} directory not found: {modified_split_dir}")
-                continue
-            if not original_split_dir.exists():
-                logging.warning(f"Original {split} directory not found: {original_split_dir}")
-                continue
-                
-            logging.info(f"Processing {split} split...")
-            
-            # Get all modified mesh files
-            modified_files = list(modified_split_dir.glob('*_modified.obj'))
-            logging.info(f"Found {len(modified_files)} modified mesh files in {split}")
-            
-            for mesh_file in modified_files:
-                # Get the base name (e.g., 'bed_0384' from 'bed_0384_modified.obj')
-                base_name = mesh_file.stem.replace('_modified', '')
-                original_file = original_split_dir / f"{base_name}_original.obj"
-                
-                if original_file.exists():
-                    self.mesh_pairs.append((mesh_file, original_file))
-                    logging.debug(f"Found pair: {mesh_file.name} <-> {original_file.name}")
-                else:
-                    logging.warning(f"Original mesh not found for {mesh_file.name}: {original_file}")
+            if original_file.exists():
+                self.mesh_pairs.append((mesh_file, original_file))
+                logging.debug(f"Found pair: {mesh_file.name} <-> {original_file.name}")
+            else:
+                logging.warning(f"Original mesh not found for {mesh_file.name}: {original_file}")
         
         if not self.mesh_pairs:
             raise ValueError(
                 f"No valid mesh pairs found in {data_dir}. Please check:\n"
-                f"1. Directory structure: modified/train/, modified/validation/, original/train/, original/validation/\n"
+                f"1. Directory structure: modified/ and original/ directories should exist\n"
                 f"2. File naming convention: *_modified.obj and *_original.obj\n"
                 f"3. Current directory structure:\n"
-                f"   - Modified files: {list(modified_dir.glob('**/*_modified.obj'))}\n"
-                f"   - Original files: {list(original_dir.glob('**/*_original.obj'))}"
+                f"   - Modified files: {list(modified_dir.glob('*_modified.obj'))}\n"
+                f"   - Original files: {list(original_dir.glob('*_original.obj'))}"
             )
         
         # Shuffle the mesh pairs
@@ -274,6 +263,7 @@ def main():
     parser.add_argument('--hidden-channels', type=int, default=128, help='Number of hidden channels in the model')
     parser.add_argument('--num-layers', type=int, default=3, help='Number of layers in encoder and decoder')
     parser.add_argument('--models-per-epoch', type=int, help='Number of models to use per epoch (default: use all available models)')
+    parser.add_argument('--is-train', type=bool, default=True, help='Whether to use training or validation data')
     args = parser.parse_args()
     
     # Create checkpoint and logs directories if they don't exist
@@ -304,7 +294,7 @@ def main():
     trainer = RetopologyTrainer(model, learning_rate=args.learning_rate)
     
     # Create dataset
-    dataset = MeshDataset(args.data_dir, models_per_epoch=args.models_per_epoch)
+    dataset = MeshDataset(args.data_dir, models_per_epoch=args.models_per_epoch, is_train=True)
     
     # Create data loader
     dataloader = DataLoader(

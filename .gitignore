@@ -37,12 +37,12 @@ test_highpolygon_obj/
 ModelNet40/
 output/
 checkpoints/
+*.obj
+*.fbx
 *.log
 *.pt
 *.pth
 *.ckpt
-*.obj
-*.fbx
 *.ply
 *.stl
 *.png
