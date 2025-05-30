@@ -1,6 +1,7 @@
 import bpy
 import os
 import argparse
+import sys
 from pathlib import Path
 
 def clear_scene():
@@ -87,7 +88,7 @@ def convert_to_obj(input_path: str, output_path: str):
 def apply_modifiers_to_mesh(input_path: str, output_path: str, 
                           subdivision_levels: int = 2,
                           noise_scale: float = 0.1,
-                          noise_strength: float = 0.1):
+                          noise_strength: float = 1.0):
     """
     Apply subdivision and noise modifiers to a mesh.
     Args:
@@ -117,21 +118,46 @@ def apply_modifiers_to_mesh(input_path: str, output_path: str,
     
     # Create a new texture for the noise
     tex = bpy.data.textures.new('Noise', type='CLOUDS')
-    tex.noise_scale = noise_scale
+    tex.noise_scale = noise_scale   
     noise.texture = tex
     
-    # Apply modifiers
+    # Apply modifiers and check file size
     bpy.context.view_layer.objects.active = obj
-    for modifier in obj.modifiers:
-        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    current_subdiv_levels = subdivision_levels
     
-    # Export the modified mesh
-    bpy.ops.wm.obj_export(filepath=output_path)
+    while current_subdiv_levels >= 0:
+        # Clear all modifiers
+        obj.modifiers.clear()
+        
+        subdiv = obj.modifiers.new(name="Subdivision", type='SUBSURF')
+        subdiv.levels = current_subdiv_levels
+        subdiv.render_levels = current_subdiv_levels
+        
+        # Re-add noise modifier
+        noise = obj.modifiers.new(name="Noise", type='DISPLACE')
+        noise.strength = noise_strength
+        noise.texture = tex
+        
+        # Apply modifiers
+        for modifier in obj.modifiers:
+            bpy.ops.object.modifier_apply(modifier=modifier.name)
+        
+        # Export and check size
+        bpy.ops.wm.obj_export(filepath=output_path)
+        
+        # If file size is acceptable or we've reached minimum subdivision, break
+        if os.path.getsize(output_path) <= 2 * 1024 * 1024 or current_subdiv_levels == 0:
+            print(f"Final subdivision level: {current_subdiv_levels}")
+            break
+            
+        # If file is still too large, reduce subdivision level
+        print(f"File too large ({os.path.getsize(output_path) / (1024*1024):.2f} MB), reducing subdivision to {current_subdiv_levels-1}")
+        current_subdiv_levels -= 1
 
 def process_directory(input_dir: str, output_dir: str, 
                      subdivision_levels: int = 2,
                      noise_scale: float = 0.1,
-                     noise_strength: float = 0.1):
+                     noise_strength: float = 1):
     """
     Process all mesh files in a directory and its subdirectories.
     Args:
@@ -159,13 +185,20 @@ def process_directory(input_dir: str, output_dir: str,
         original_subdir = os.path.join(original_dir, rel_path)
         os.makedirs(modified_subdir, exist_ok=True)
         os.makedirs(original_subdir, exist_ok=True)
-        
+        i = 0;
         # Process each mesh file
         for file in files:
+            i += 1
+            if i > 100:
+                break
             file_ext = os.path.splitext(file)[1].lower()
             if file_ext in ['.off', '.fbx', '.obj']:
                 input_path = os.path.join(root, file)
                 base_name = os.path.splitext(file)[0]
+                # check if file is bigger than 2 mb
+                if os.path.getsize(input_path) > 2 * 1024 * 1024:
+                    print(f"Skipping {input_path} because it is too large")
+                    continue
                 
                 # Define paths for original and modified meshes
                 temp_obj_path = os.path.join(temp_dir, f"{base_name}.obj")
@@ -204,17 +237,26 @@ def process_directory(input_dir: str, output_dir: str,
         print(f"Warning: Could not clean up temporary directory: {str(e)}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Apply Blender modifiers to meshes.")
-    parser.add_argument('input_dir', help='Input directory containing mesh files (.off, .fbx, .obj)')
+    # Get the arguments after '--'
+    argv = sys.argv
+    if "--" in argv:
+        argv = argv[argv.index("--") + 1:]
+    else:
+        argv = []
+
+    parser = argparse.ArgumentParser(description='Apply Blender modifiers to meshes')
+    parser.add_argument('input_dir', help='Input directory containing mesh files')
     parser.add_argument('output_dir', help='Output directory for modified meshes')
-    parser.add_argument('--subdivision-levels', type=int, default=2,
-                      help='Number of subdivision levels (default: 2)')
-    parser.add_argument('--noise-scale', type=float, default=0.1,
-                      help='Scale of the noise modifier (default: 0.1)')
-    parser.add_argument('--noise-strength', type=float, default=0.1,
-                      help='Strength of the noise modifier (default: 0.1)')
+    parser.add_argument('--subdivision-levels', type=int, default=2, help='Number of subdivision levels')
+    parser.add_argument('--noise-scale', type=float, default=0.1, help='Scale of the noise modifier')
+    parser.add_argument('--noise-strength', type=float, default=0.1, help='Strength of the noise modifier')
     
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    
+    print(f"Processing meshes from {args.input_dir} to {args.output_dir}")
+    print(f"Using subdivision levels: {args.subdivision_levels}")
+    print(f"Using noise scale: {args.noise_scale}")
+    print(f"Using noise strength: {args.noise_strength}")
     
     process_directory(
         args.input_dir,
